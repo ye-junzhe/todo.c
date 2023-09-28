@@ -36,9 +36,10 @@ void createTodo() {
     // printf("TODO Status: %d,\nTODO Info: %s,\nThis is the NO.%d todo\n", todo.status, todo.todo_info, todo_count);
 }
 
+// TODO: Clear screen
 void printTodos() {
     for (int i = 0; i < todo_count; i++) {
-        printf("%s\n",todos[i].todo_info);
+        printf("(%d). %s\n", i + 1, todos[i].todo_info);
     }
 }
 
