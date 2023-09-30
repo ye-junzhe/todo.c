@@ -132,7 +132,7 @@ void markDoneTodo() {
 }
 
 void printHelp() {
-    printf("c => create\ns => show\nd => mark done\nq => quit\n");
+    printf("c => create\nr => rename\ns => show\nd => mark done\nq => quit\n");
 }
 
 void cleanMem() {
