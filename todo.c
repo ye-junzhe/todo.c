@@ -5,6 +5,14 @@
 
 #define RELEASE
 
+#ifdef RELEASE
+#define CLEAR system("clear")
+#else
+#define CLEAR
+#endif
+
+#define ASCII_OFFSET_DIGIT 48
+
 typedef enum {
     PENDING,
     COMPLETE
@@ -15,8 +23,28 @@ typedef struct {
     Status status;
 } Todo;
 
+typedef struct {
+    char *log_info;
+    int isCreated;
+    int isDone;
+    int isNotAvailableOp;
+} Logger;
+
 int todo_count = 0;
 Todo *todos = NULL;
+
+Logger logger = {"Do Something!\n", 0, 0, 0};
+
+void load_log_info(char *info) {
+    logger.log_info = info;
+}
+
+void print_log_info() {
+    if (logger.isDone ||
+        logger.isCreated ||
+        logger.isNotAvailableOp)
+        printf("%s", logger.log_info);
+}
 
 void createTodo() {
     char *line = NULL;
@@ -38,7 +66,8 @@ void createTodo() {
     todos[todo_count] = todo;
     todo_count++;
 
-    printf("New todo added: %s", line);
+    load_log_info("New todo created\n");
+    logger.isCreated = 1;
 }
 
 void printTodos() {
@@ -49,28 +78,30 @@ void printTodos() {
 
 void markDoneTodo() {
     if (todo_count == 0) {
-        printf("No Todos yet\n");
+        load_log_info("No Todos yet\n");
         return;
     }
 
-    int which_one;
     printf("Which todo you wish to remove ? => ");
-    scanf("%d", &which_one);
-
-    if (!isdigit(which_one)) {
-        printf("Not a digit");
-        return;
-    }
+    fflush(stdin);
+    int which_one = fgetc(stdin) - ASCII_OFFSET_DIGIT;
 
     if (which_one > todo_count || which_one <= 0) {
-        printf("No Todo has that index\n");
+        load_log_info("No Todo has that index\n");
         return;
-    } 
+    }
 
     for (int i = which_one - 1; i <= todo_count - 1; i++) {
         todos[i] = todos[i + 1];
     }
     todo_count --;
+
+    load_log_info("Todo done!\n");
+    logger.isDone = 1;
+}
+
+void printHelp() {
+    printf("c => create\ns => show\nd => mark done\nq => quit\n");
 }
 
 void cleanMem() {
@@ -78,11 +109,13 @@ void cleanMem() {
 }
 
 void listenUserInput() {
+
     system("clear");
+
     char userInput;
-    while (1) {
-        printf("c => create\ns => show\nd => mark done\nq => quit\n");
-        printf(
+
+    printHelp();
+while (1) { printf(
             "                      d8b                                               d8b         \n"
             "   d8P                88P                        d8P                    88P         \n"
             "d888888P             d88                      d888888P                 d88          \n"
@@ -94,34 +127,41 @@ void listenUserInput() {
             "                                                                                    \n"
             "                                                                                    \n"
         );
+
         printTodos();
+        print_log_info();
+        logger.isDone = 0;
+        logger.isCreated = 0;
+        logger.isNotAvailableOp = 0;
+
         fflush(stdin);
         scanf("%c", &userInput);
+
         switch (userInput) {
             case 'c':
                 createTodo();
-                #ifdef RELEASE
-                system("clear");
-                #endif /* ifdef  RELEASE */
+                CLEAR;
                 break;
             case 's':
                 printTodos();
-                #ifdef RELEASE
-                system("clear");
-                #endif /* ifdef  RELEASE */
+                CLEAR;
                 break;
             case 'd':
                 markDoneTodo();
-                #ifdef RELEASE
-                system("clear");
-                #endif /* ifdef  RELEASE */
+                CLEAR;
+                break;
+            case 'h':
+                printHelp();
+                CLEAR;
                 break;
             case 'q':
                 printf("Quitting\n");
                 cleanMem();
                 return;
             default:
-                printf("Not an available option\n");
+                logger.isNotAvailableOp = 1;
+                load_log_info("Not an available option\n");
+                CLEAR;
         }
     }
 }
