@@ -28,12 +28,13 @@ typedef struct {
     int isCreated;
     int isDone;
     int isNotAvailableOp;
+    int isRenamed;
 } Logger;
 
 int todo_count = 0;
 Todo *todos = NULL;
 
-Logger logger = {"Do Something!\n", 0, 0, 0};
+Logger logger = {"Do Something!\n", 0, 0, 0, 0};
 
 void load_log_info(char *info) {
     logger.log_info = info;
@@ -68,6 +69,36 @@ void createTodo() {
 
     load_log_info("New todo created\n");
     logger.isCreated = 1;
+}
+
+void renameTodo() {
+    if (todo_count == 0) {
+        load_log_info("No Todos yet\n");
+        return;
+    }
+
+    printf("Which todo you wish to rename? => ");
+
+    fflush(stdin);
+    int which_one = fgetc(stdin) - ASCII_OFFSET_DIGIT;
+
+    if (which_one > todo_count || which_one <= 0) {
+        load_log_info("No Todo has that index\n");
+        return;
+    }
+
+    char *line = NULL;
+    size_t linecap = 0;
+
+    printf("Renaming todo: => ");
+
+    fflush(stdin);
+    getline(&line, &linecap, stdin);
+
+    todos[which_one - 1].todo_info = (char *)realloc(todos[which_one - 1].todo_info, strlen(line));
+    strcpy(todos[which_one - 1].todo_info, line);
+    load_log_info("Todo Renamed\n");
+    logger.isRenamed = 1;
 }
 
 void printTodos() {
@@ -144,6 +175,10 @@ while (1) { printf(
                 break;
             case 's':
                 printTodos();
+                CLEAR;
+                break;
+            case 'r':
+                renameTodo();
                 CLEAR;
                 break;
             case 'd':
