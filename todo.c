@@ -186,8 +186,8 @@ while (1) { printf(
                 CLEAR;
                 break;
             case 'h':
-                printHelp();
                 CLEAR;
+                printHelp();
                 break;
             case 'q':
                 printf("Quitting\n");
