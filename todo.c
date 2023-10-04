@@ -13,10 +13,7 @@
 
 #define ASCII_OFFSET_DIGIT 48
 
-typedef enum {
-    PENDING,
-    COMPLETE
-} Status;
+typedef enum { PENDING, COMPLETE } Status;
 
 typedef struct {
     char *todo_info;
@@ -40,11 +37,40 @@ void load_log_info(char *info) {
     logger.log_info = info;
 }
 
-void print_log_info() {
+void log_info() {
     if (logger.isDone ||
         logger.isCreated ||
-        logger.isNotAvailableOp)
+        logger.isNotAvailableOp ||
+        logger.isRenamed)
         printf("%s", logger.log_info);
+}
+
+void printTodos() {
+    for (int i = 0; i < todo_count; i++) {
+        printf("(%d). %s\n", i + 1, todos[i].todo_info);
+    }
+}
+
+void printDashBoard() {
+    printf(
+        "                      d8b                                               d8b         \n"
+        "   d8P                88P                        d8P                    88P         \n"
+        "d888888P             d88                      d888888P                 d88          \n"
+        "  ?88'   d8888b  d888888   d8888b  .d888b,      ?88'   d8888b      d888888   d8888b \n"
+        "  88P   d8P' ?88d8P' ?88  d8P' ?88 ?8b,         88P   d8P' ?88    d8P' ?88  d8P' ?88\n"
+        "  88b   88b  d8888b  ,88b 88b  d88   `?8b       88b   88b  d88    88b  ,88b 88b  d88\n"
+        "  `?8b  `?8888P'`?88P'`88b`?8888P'`?888P'       `?8b  `?8888P'    `?88P'`88b`?8888P \n"
+        "                                                                                    \n"
+        "                                                                                    \n"
+        "                                                                                    \n"
+    );
+
+    printTodos();
+    log_info();
+    logger.isDone = 0;
+    logger.isCreated = 0;
+    logger.isNotAvailableOp = 0;
+    logger.isRenamed = 0;
 }
 
 void createTodo() {
@@ -101,12 +127,6 @@ void renameTodo() {
     logger.isRenamed = 1;
 }
 
-void printTodos() {
-    for (int i = 0; i < todo_count; i++) {
-        printf("(%d). %s\n", i + 1, todos[i].todo_info);
-    }
-}
-
 void markDoneTodo() {
     if (todo_count == 0) {
         load_log_info("No Todos yet\n");
@@ -141,29 +161,13 @@ void cleanMem() {
 
 void listenUserInput() {
 
-    system("clear");
+    CLEAR;
 
     char userInput;
 
     printHelp();
-while (1) { printf(
-            "                      d8b                                               d8b         \n"
-            "   d8P                88P                        d8P                    88P         \n"
-            "d888888P             d88                      d888888P                 d88          \n"
-            "  ?88'   d8888b  d888888   d8888b  .d888b,      ?88'   d8888b      d888888   d8888b \n"
-            "  88P   d8P' ?88d8P' ?88  d8P' ?88 ?8b,         88P   d8P' ?88    d8P' ?88  d8P' ?88\n"
-            "  88b   88b  d8888b  ,88b 88b  d88   `?8b       88b   88b  d88    88b  ,88b 88b  d88\n"
-            "  `?8b  `?8888P'`?88P'`88b`?8888P'`?888P'       `?8b  `?8888P'    `?88P'`88b`?8888P \n"
-            "                                                                                    \n"
-            "                                                                                    \n"
-            "                                                                                    \n"
-        );
-
-        printTodos();
-        print_log_info();
-        logger.isDone = 0;
-        logger.isCreated = 0;
-        logger.isNotAvailableOp = 0;
+    while (1) {
+        printDashBoard();
 
         fflush(stdin);
         scanf("%c", &userInput);
@@ -201,8 +205,7 @@ while (1) { printf(
     }
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     listenUserInput();
     return EXIT_SUCCESS;
 }
