@@ -1,9 +1,9 @@
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define RELEASE
 
@@ -12,6 +12,8 @@
 #else
 #define CLEAR
 #endif
+
+#define LOG ( logger.isDone || logger.isCreated || logger.isNotAvailableOp || logger.isRenamed )
 
 typedef enum { PENDING, COMPLETE } Status;
 
@@ -28,17 +30,40 @@ typedef struct {
         isRenamed;
 } Logger;
 
+typedef struct {
+    int previous_cursor;
+    int next_cursor;
+} Cursor;
+
+typedef struct {
+    int running;
+    int got_a_job;
+    int count_down;
+} ThreadController;
+
+
+Cursor cursor = {0, 0};
+
 int todo_count = 0;
-int previous_cursor = 0;
-int next_cursor = 0;
+
 Todo *todos = NULL;
 
 Logger logger = {"Do Something!\n", 0, 0, 0, 0};
 
+pthread_t thread_logging_info_clear;
+pthread_mutex_t mutex;
+pthread_cond_t cond;
+ThreadController thread_logging_info_clear_controller;
+
+
+char userInput;
+
 struct termios oldt, newt;
 
+/*
+    Disable line buffering and echo
+ */
 void disableEcho() {
-    // Disable line buffering and echo
     tcgetattr(STDIN_FILENO, &oldt);
     newt = oldt;
     newt.c_lflag &= ~(ICANON | ECHO);
@@ -49,22 +74,24 @@ void enableEcho() {
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 }
 
+/*
+    Display todos by refreshing the UI
+ */
+void displayTodos() {
+    for (int i = 0; i < todo_count; i++) {
+        printf("(%d). %s\n", i + 1, todos[i].todo_info);
+    }
+}
+
+/*
+    Logging methods for the Logger
+*/
 void load_log_info(char *info) {
     logger.log_info = info;
 }
 
 void log_info() {
-    if (logger.isDone ||
-        logger.isCreated ||
-        logger.isNotAvailableOp ||
-        logger.isRenamed)
-        printf("%s", logger.log_info);
-}
-
-void displayTodos() {
-    for (int i = 0; i < todo_count; i++) {
-        printf("(%d). %s\n", i + 1, todos[i].todo_info);
-    }
+    if LOG printf("%s", logger.log_info);
 }
 
 void printDashBoard() {
@@ -81,12 +108,66 @@ void printDashBoard() {
         "                                                                                    \n"
     );
 
-    refreshUI();
+    displayTodos();
+
+    // printf(
+    //     "                      d8b                           d8b                                  \n"
+    //     "   d8P                88P                           88P                                  \n"
+    //     "d888888P             d88                           d88                                   \n"
+    //     "  ?88'   d8888b  d888888   d8888b  .d888b,     d888888   d8888b  ?88   d8P  d8P  88bd88b \n"
+    //     "  88P   d8P' ?88d8P' ?88  d8P' ?88 ?8b,       d8P' ?88  d8P' ?88 d88  d8P' d8P'  88P' ?8b\n"
+    //     "  88b   88b  d8888b  ,88b 88b  d88   `?8b     88b  ,88b 88b  d88 ?8b ,88b ,88'  d88   88P\n"
+    //     "  `?8b  `?8888P'`?88P'`88b`?8888P'`?888P'     `?88P'`88b`?8888P' `?888P'888P'  d88'   88b\n"
+    //     "                                                                                         \n"
+    //     "                                                                                         \n"
+    //     "                                                                                         \n"
+    // );
     log_info();
     logger.isDone = 0;
     logger.isCreated = 0;
     logger.isNotAvailableOp = 0;
     logger.isRenamed = 0;
+}
+
+void thread_logging_info_init() {
+    thread_logging_info_clear_controller.running = 1;
+    thread_logging_info_clear_controller.got_a_job = 0;
+    thread_logging_info_clear_controller.count_down = 5;
+}
+
+// NOTE: Had a idea about telling the thread to do a bunch of things
+// after waking up. Now it's just checking a variable to see what to do.
+// Maybe use something like a instruction char* pointer?
+
+void checkShouldClear() {
+    while (thread_logging_info_clear_controller.running) {
+
+        // count_down == 0 means that during the sleep time,
+        // there is no 'c' being pressed
+        if (thread_logging_info_clear_controller.got_a_job && thread_logging_info_clear_controller.count_down == 0) {
+            CLEAR;
+            printDashBoard();
+            pthread_mutex_lock(&mutex);
+            thread_logging_info_clear_controller.got_a_job = 0;
+            pthread_mutex_unlock(&mutex);
+        } else {
+
+            pthread_mutex_lock(&mutex);
+            while (!thread_logging_info_clear_controller.got_a_job) {
+                pthread_cond_wait(&cond, &mutex);
+            }
+            pthread_mutex_unlock(&mutex);
+
+            thread_logging_info_clear_controller.count_down = 0;
+            sleep(5); // clear the screen after 5 seconds, but can log thread know that if should_clear is set to false at this moment
+            checkShouldClear();
+        }
+    }
+}
+
+void * loggingInfoClear_ThreadJob(void * param) {
+    checkShouldClear();
+    return NULL;
 }
 
 void concatArrow(int target) {
@@ -98,34 +179,37 @@ void concatArrow(int target) {
         }
     }
 
-    previous_cursor = next_cursor;
-    next_cursor = target; // cursor here is the index of the new todo
+    cursor.previous_cursor = cursor.next_cursor;
+    cursor.next_cursor = target; // cursor here is the index of the new todo
 
-    todos[next_cursor].todo_info = strcat(todos[next_cursor].todo_info, "<-\n");
+    todos[cursor.next_cursor].todo_info = strcat(todos[cursor.next_cursor].todo_info, "<-\n");
 
-    if (todo_count == 0 || previous_cursor > todo_count - 1 || next_cursor == previous_cursor) return;
+    if (todo_count == 0 || cursor.previous_cursor > todo_count - 1 || cursor.next_cursor == cursor.previous_cursor) return;
 
-    int length = strlen(todos[previous_cursor].todo_info);
+    int length = strlen(todos[cursor.previous_cursor].todo_info);
     char modifiedStr[length - 2];
-    strncpy(modifiedStr, todos[previous_cursor].todo_info, length - 2);
+    strncpy(modifiedStr, todos[cursor.previous_cursor].todo_info, length - 2);
     modifiedStr[length - 4] = '\n';
     modifiedStr[length - 3] = '\0';
-    strcpy(todos[previous_cursor].todo_info, modifiedStr);
+    strcpy(todos[cursor.previous_cursor].todo_info, modifiedStr);
 }
 
 void arrowUp() {
-    if (next_cursor - 1 < 0) return;
+    if (cursor.next_cursor - 1 < 0) return;
 
-    concatArrow(next_cursor - 1);
+    concatArrow(cursor.next_cursor - 1);
 }
 
 void arrowDown() {
-    if (next_cursor + 1 >= todo_count) return;
+    if (cursor.next_cursor + 1 >= todo_count) return;
 
-    concatArrow(next_cursor + 1);
+    concatArrow(cursor.next_cursor + 1);
 }
 
 void createTodo() {
+
+    thread_logging_info_init();
+
     char *line = NULL;
     size_t linecap = 0;
 
@@ -149,11 +233,19 @@ void createTodo() {
     concatArrow(todo_count);
     todo_count++;
 
+    pthread_mutex_lock(&mutex);
+    thread_logging_info_clear_controller.got_a_job = 1;
+    pthread_cond_signal(&cond);
+    pthread_mutex_unlock(&mutex);
+
     load_log_info("New todo created\n");
     logger.isCreated = 1;
 }
 
 void renameTodo() {
+
+    thread_logging_info_init();
+
     if (todo_count == 0) {
         load_log_info("No Todos yet\n");
         return;
@@ -169,22 +261,30 @@ void renameTodo() {
     getline(&line, &linecap, stdin);
     disableEcho();
 
-    todos[next_cursor].todo_info = (char *)realloc(todos[next_cursor].todo_info, strlen(line));
-    strcpy(todos[next_cursor].todo_info, line);
+    todos[cursor.next_cursor].todo_info = (char *)realloc(todos[cursor.next_cursor].todo_info, strlen(line));
+    strcpy(todos[cursor.next_cursor].todo_info, line);
 
     for(int i = 0;; i++) {
-        if(todos[next_cursor].todo_info[i] == '\n') {
-            todos[next_cursor].todo_info[i] = ' ';
+        if(todos[cursor.next_cursor].todo_info[i] == '\n') {
+            todos[cursor.next_cursor].todo_info[i] = ' ';
             break;
         }
     }
-    todos[next_cursor].todo_info = strcat(todos[next_cursor].todo_info, "<-\n");
+    todos[cursor.next_cursor].todo_info = strcat(todos[cursor.next_cursor].todo_info, "<-\n");
+
+    pthread_mutex_lock(&mutex);
+    thread_logging_info_clear_controller.got_a_job = 1;
+    pthread_cond_signal(&cond);
+    pthread_mutex_unlock(&mutex);
 
     load_log_info("Todo Renamed\n");
     logger.isRenamed = 1;
 }
 
 void markDoneTodo() {
+
+    thread_logging_info_init();
+
     if (todo_count == 0) {
         load_log_info("No Todos yet\n");
         return;
@@ -194,18 +294,23 @@ void markDoneTodo() {
     // It acts as exatly the same as the original todo!
     // It will log every time
     // And maybe we can move the cursor right and left
-    todos[next_cursor].status = COMPLETE;
+    todos[cursor.next_cursor].status = COMPLETE;
 
-    for (int i = next_cursor; i <= todo_count - 1; i++) {
+    for (int i = cursor.next_cursor; i <= todo_count - 1; i++) {
         todos[i] = todos[i + 1];
     }
     todo_count--;
     printf("%d\n", todo_count);
 
     if (todo_count == 0) return;
-    if (next_cursor == todo_count) // cursor at the highest todo
-        concatArrow(next_cursor - 1);
-    else concatArrow(next_cursor);
+    if (cursor.next_cursor == todo_count) // cursor at the highest todo
+        concatArrow(cursor.next_cursor - 1);
+    else concatArrow(cursor.next_cursor);
+
+    pthread_mutex_lock(&mutex);
+    thread_logging_info_clear_controller.got_a_job = 1;
+    pthread_cond_signal(&cond);
+    pthread_mutex_unlock(&mutex);
 
     load_log_info("Todo done!\n");
     logger.isDone = 1;
@@ -215,24 +320,43 @@ void printHelp() {
     printf("c => create\nk => up\nj => down\nr => rename\ns => refresh\nx => mark done\nq => quit\n");
 }
 
+void printDefaultMessage() {
+    logger.isNotAvailableOp = 1;
+    load_log_info("Not an available option\n");
+}
+
 void cleanMem() {
     free(todos);
 }
 
-void listenUserInput() {
+void init() {
+    pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&cond, NULL);
 
     disableEcho();
 
     CLEAR;
 
-    char userInput;
-
     printHelp();
+}
+
+
+void listenUserInput() {
+    init();
+
+    if (pthread_create(&thread_logging_info_clear, NULL, loggingInfoClear_ThreadJob, NULL) != 0) {
+        perror("Failed creating thread\n");
+        exit(EXIT_FAILURE);
+    } else {
+        thread_logging_info_clear_controller.running = 1;
+    }
+
     while (1) {
+
         printDashBoard();
 
         fflush(stdin);
-        scanf("%c", &userInput);
+        read(STDIN_FILENO, &userInput, 1);
 
         switch (userInput) {
             case 'c':
@@ -266,11 +390,15 @@ void listenUserInput() {
             case 'q':
                 printf("Quitting\n");
                 cleanMem();
+                pthread_cond_signal(&cond);
+                // pthread_join(thread_logging_info_clear, NULL);
+                // printf("log thread joined");
+                pthread_mutex_destroy(&mutex);
+                pthread_cond_destroy(&cond);
                 return;
             default:
-                logger.isNotAvailableOp = 1;
                 printf("%c", userInput);
-                load_log_info("Not an available option\n");
+                printDefaultMessage();
                 CLEAR;
         }
     }
