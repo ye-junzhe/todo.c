@@ -159,7 +159,7 @@ void checkShouldClear() {
             pthread_mutex_unlock(&mutex);
 
             thread_logging_info_clear_controller.count_down = 0;
-            sleep(5); // clear the screen after 5 seconds, but can log thread know that if should_clear is set to false at this moment
+            sleep(5); // clear the screen after 5 seconds
             checkShouldClear();
         }
     }
@@ -338,11 +338,6 @@ void init() {
     CLEAR;
 
     printHelp();
-}
-
-
-void listenUserInput() {
-    init();
 
     if (pthread_create(&thread_logging_info_clear, NULL, loggingInfoClear_ThreadJob, NULL) != 0) {
         perror("Failed creating thread\n");
@@ -351,6 +346,10 @@ void listenUserInput() {
         thread_logging_info_clear_controller.running = 1;
     }
 
+}
+
+
+void listenUserInput() {
     while (1) {
 
         printDashBoard();
@@ -405,6 +404,7 @@ void listenUserInput() {
 }
 
 int main(int argc, char *argv[]) {
+    init();
     listenUserInput();
     return EXIT_SUCCESS;
 }
