@@ -18,12 +18,12 @@
 typedef enum { PENDING, COMPLETE } Status;
 
 typedef struct {
-    char *todo_info;
+    char* todo_info;
     Status status;
 } Todo;
 
 typedef struct {
-    char *log_info;
+    char* log_info;
     int isCreated,
         isDone,
         isNotAvailableOp,
@@ -41,12 +41,15 @@ typedef struct {
     int count_down;
 } ThreadController;
 
-
+/*
+      Initializd stuff
+*/
+/* ========================= */
 Cursor cursor = {0, 0};
 
 int todo_count = 0;
 
-Todo *todos = NULL;
+Todo* todos = NULL;
 
 Logger logger = {"Do Something!\n", 0, 0, 0, 0};
 
@@ -55,10 +58,10 @@ pthread_mutex_t mutex;
 pthread_cond_t cond;
 ThreadController thread_logging_info_clear_controller;
 
-
-char userInput;
+char userChoice;
 
 struct termios oldt, newt;
+/* ========================= */
 
 /*
     Disable line buffering and echo
@@ -210,7 +213,7 @@ void createTodo() {
 
     thread_logging_info_init();
 
-    char *line = NULL;
+    char* line = NULL;
     size_t linecap = 0;
 
     printf("Creating todo: => ");
@@ -225,6 +228,13 @@ void createTodo() {
     Todo todo;
     todo.todo_info = (char *)malloc(strlen(line) + 1 + 3);
     strcpy(todo.todo_info, line);
+
+    FILE* fptr = fopen("todos.txt", "a+");
+    fputs(line, fptr);
+
+    fclose(fptr);
+    if (line)
+        free(line);
 
     todo.status = PENDING;
 
@@ -242,6 +252,82 @@ void createTodo() {
     logger.isCreated = 1;
 }
 
+void readTodos() {
+    FILE* fptr = NULL;
+    if (fopen("todos.txt", "r") != NULL)
+        fptr = fopen("todos.txt", "r");
+    else 
+        fptr = fopen("todos.txt", "w"); // Create if todos.txt not exists
+    char* line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    if (fptr == NULL) printf("File can't be opened \n");
+
+    while ((read = getline(&line, &len, fptr)) != -1) {
+
+        Todo todo;
+        todo.todo_info = (char *)malloc(strlen(line) + 1 + 3);
+        strcpy(todo.todo_info, line);
+
+        todo.status = PENDING;
+
+        todos = (Todo *)realloc(todos, (todo_count + 3) * sizeof(Todo));
+        todos[todo_count] = todo;
+        concatArrow(todo_count);
+        todo_count++;
+
+    }
+
+    fclose(fptr);
+    if (line)
+        free(line);
+}
+
+void removeLine(
+    FILE* src,
+    FILE* temp,
+    int cursor_pointing)
+{
+    char* line = NULL;
+    size_t len = 0;
+    int count = 1;
+
+    while ((getline(&line, &len, src)) != -1) {
+        if (cursor_pointing + 1 != count)
+            fputs(line, temp);
+
+        count++;
+    }
+
+    if (line)
+        free(line);
+}
+
+void replaceLine(
+    FILE* src,
+    FILE* temp,
+    int cursor_pointing,
+    char* input_line)
+{
+    char* line = NULL;
+    size_t len = 0;
+    int count = 1;
+
+    while ((getline(&line, &len, src)) != -1){
+
+        if (cursor_pointing + 1 != count)
+            fputs(line, temp);
+        else
+            fputs(input_line, temp);
+
+        count++;
+    }
+
+    if (line)
+        free(line);
+}
+
 void renameTodo() {
 
     thread_logging_info_init();
@@ -251,7 +337,7 @@ void renameTodo() {
         return;
     }
 
-    char *line = NULL;
+    char* line = NULL;
     size_t linecap = 0;
 
     printf("Renaming todo: => ");
@@ -264,6 +350,18 @@ void renameTodo() {
     todos[cursor.next_cursor].todo_info = (char *)realloc(todos[cursor.next_cursor].todo_info, strlen(line));
     strcpy(todos[cursor.next_cursor].todo_info, line);
 
+    // Rename the corresponding todo in todos.txt
+    FILE* fptr = fopen("todos.txt", "r+");
+    FILE* temp = fopen("todos_tmp.txt", "w+");
+    replaceLine(fptr, temp, cursor.next_cursor, line);
+    fclose(fptr);
+    fclose(temp);
+    remove("todos.txt");
+    rename("todos_tmp.txt", "todos.txt");
+    if (line)
+        free(line);
+
+    // Remove the \n of the new added todo
     for(int i = 0;; i++) {
         if(todos[cursor.next_cursor].todo_info[i] == '\n') {
             todos[cursor.next_cursor].todo_info[i] = ' ';
@@ -290,17 +388,20 @@ void markDoneTodo() {
         return;
     }
 
-    // TODO: Show todos that are already down, just declare a new Todo struct, and put this COMPLETE todo into it
-    // It acts as exatly the same as the original todo!
-    // It will log every time
-    // And maybe we can move the cursor right and left
     todos[cursor.next_cursor].status = COMPLETE;
 
     for (int i = cursor.next_cursor; i <= todo_count - 1; i++) {
         todos[i] = todos[i + 1];
     }
     todo_count--;
-    printf("%d\n", todo_count);
+
+    FILE* fptr = fopen("todos.txt", "r+");
+    FILE* temp = fopen("todos_temp.txt", "w+");
+    removeLine(fptr, temp, cursor.next_cursor);
+    fclose(fptr);
+    fclose(temp);
+    remove("todos.txt");
+    rename("todos_temp.txt", "todos.txt");
 
     if (todo_count == 0) return;
     if (cursor.next_cursor == todo_count) // cursor at the highest todo
@@ -355,9 +456,9 @@ void listenUserInput() {
         printDashBoard();
 
         fflush(stdin);
-        read(STDIN_FILENO, &userInput, 1);
+        read(STDIN_FILENO, &userChoice, 1);
 
-        switch (userInput) {
+        switch (userChoice) {
             case 'c':
                 createTodo();
                 CLEAR;
@@ -390,13 +491,11 @@ void listenUserInput() {
                 printf("Quitting\n");
                 cleanMem();
                 pthread_cond_signal(&cond);
-                // pthread_join(thread_logging_info_clear, NULL);
-                // printf("log thread joined");
                 pthread_mutex_destroy(&mutex);
                 pthread_cond_destroy(&cond);
                 return;
             default:
-                printf("%c", userInput);
+                printf("%c", userChoice);
                 printDefaultMessage();
                 CLEAR;
         }
@@ -404,6 +503,7 @@ void listenUserInput() {
 }
 
 int main(int argc, char *argv[]) {
+    readTodos();
     init();
     listenUserInput();
     return EXIT_SUCCESS;

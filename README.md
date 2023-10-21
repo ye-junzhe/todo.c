@@ -1,6 +1,8 @@
 # todo.c
 
-A simple but useful multithreading CLI todo app
+A simple but useful CLI todo app
+
+![todo.c GIF](https://github.com/ye-junzhe/Images/blob/main/todo.c/todo.c.gif?raw=true)
 
 ### Install
 
