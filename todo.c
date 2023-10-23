@@ -42,7 +42,7 @@ typedef struct {
 } ThreadController;
 
 /*
-      Initializd stuff
+        Initializing
 */
 /* ========================= */
 Cursor cursor = {0, 0};
@@ -113,18 +113,6 @@ void printDashBoard() {
 
     displayTodos();
 
-    // printf(
-    //     "                      d8b                           d8b                                  \n"
-    //     "   d8P                88P                           88P                                  \n"
-    //     "d888888P             d88                           d88                                   \n"
-    //     "  ?88'   d8888b  d888888   d8888b  .d888b,     d888888   d8888b  ?88   d8P  d8P  88bd88b \n"
-    //     "  88P   d8P' ?88d8P' ?88  d8P' ?88 ?8b,       d8P' ?88  d8P' ?88 d88  d8P' d8P'  88P' ?8b\n"
-    //     "  88b   88b  d8888b  ,88b 88b  d88   `?8b     88b  ,88b 88b  d88 ?8b ,88b ,88'  d88   88P\n"
-    //     "  `?8b  `?8888P'`?88P'`88b`?8888P'`?888P'     `?88P'`88b`?8888P' `?888P'888P'  d88'   88b\n"
-    //     "                                                                                         \n"
-    //     "                                                                                         \n"
-    //     "                                                                                         \n"
-    // );
     log_info();
     logger.isDone = 0;
     logger.isCreated = 0;
@@ -431,6 +419,9 @@ void cleanMem() {
 }
 
 void init() {
+
+    readTodos();
+
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
 
@@ -503,7 +494,6 @@ void listenUserInput() {
 }
 
 int main(int argc, char *argv[]) {
-    readTodos();
     init();
     listenUserInput();
     return EXIT_SUCCESS;
