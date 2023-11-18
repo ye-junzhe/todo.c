@@ -6,9 +6,9 @@ A simple but useful CLI todo app
 
 ### Install
 
-```
+```bash
+# Set the path to store todos in build.sh first
 sh build.sh
-./todo
 ```
 
 ### Keybindings
