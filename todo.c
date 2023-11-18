@@ -5,8 +5,6 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#define RELEASE
-
 #ifdef RELEASE
 #define CLEAR system("clear")
 #else
@@ -41,6 +39,11 @@ typedef struct {
     int count_down;
 } ThreadController;
 
+typedef struct{
+    char* todoFilePath;
+    char* tempFilePath;
+}TodoFilePaths ;
+
 /*
         Initializing
 */
@@ -59,6 +62,8 @@ pthread_cond_t cond;
 ThreadController thread_logging_info_clear_controller;
 
 char userChoice;
+
+TodoFilePaths paths = {};
 
 struct termios oldt, newt;
 /* ========================= */
@@ -197,6 +202,23 @@ void arrowDown() {
     concatArrow(cursor.next_cursor + 1);
 }
 
+#ifdef PATH
+TodoFilePaths createFilePath(char* base) {
+
+    base = PATH;
+
+    paths.todoFilePath = (char *) malloc(1 + strlen(base)+ strlen("/todos.txt") );
+    paths.tempFilePath = (char *) malloc(1 + strlen(base)+ strlen("/todos_tmp.txt") );
+
+    strcpy(paths.todoFilePath, base);
+    strcat(paths.todoFilePath, "/todos.txt");
+    strcpy(paths.tempFilePath, base);
+    strcat(paths.tempFilePath, "/todos_tmp.txt");
+
+    return paths;
+}
+#endif /* ifdef PATH */
+
 void createTodo() {
 
     thread_logging_info_init();
@@ -217,7 +239,7 @@ void createTodo() {
     todo.todo_info = (char *)malloc(strlen(line) + 1 + 3);
     strcpy(todo.todo_info, line);
 
-    FILE* fptr = fopen("todos.txt", "a+");
+    FILE* fptr = fopen(paths.todoFilePath, "a+");
     fputs(line, fptr);
 
     fclose(fptr);
@@ -242,15 +264,15 @@ void createTodo() {
 
 void readTodos() {
     FILE* fptr = NULL;
-    if (fopen("todos.txt", "r") != NULL)
-        fptr = fopen("todos.txt", "r");
+    if (fopen(paths.todoFilePath, "r") != NULL)
+        fptr = fopen(paths.todoFilePath, "r");
     else 
-        fptr = fopen("todos.txt", "w"); // Create if todos.txt not exists
+        fptr = fopen(paths.todoFilePath, "w"); // Create if todos.txt not exists
     char* line = NULL;
     size_t len = 0;
     ssize_t read;
 
-    if (fptr == NULL) printf("File can't be opened \n");
+    if (fptr == NULL) printf("Failed reading todos from %s\n", paths.todoFilePath);
 
     while ((read = getline(&line, &len, fptr)) != -1) {
 
@@ -339,13 +361,13 @@ void renameTodo() {
     strcpy(todos[cursor.next_cursor].todo_info, line);
 
     // Rename the corresponding todo in todos.txt
-    FILE* fptr = fopen("todos.txt", "r+");
-    FILE* temp = fopen("todos_tmp.txt", "w+");
+    FILE* fptr = fopen(paths.todoFilePath, "r+");
+    FILE* temp = fopen(paths.tempFilePath, "w+");
     replaceLine(fptr, temp, cursor.next_cursor, line);
     fclose(fptr);
     fclose(temp);
-    remove("todos.txt");
-    rename("todos_tmp.txt", "todos.txt");
+    remove(paths.todoFilePath);
+    rename(paths.tempFilePath, "todos.txt");
     if (line)
         free(line);
 
@@ -383,16 +405,16 @@ void markDoneTodo() {
     }
     todo_count--;
 
-    FILE* fptr = fopen("todos.txt", "r+");
-    FILE* temp = fopen("todos_temp.txt", "w+");
+    FILE* fptr = fopen(paths.todoFilePath, "r+");
+    FILE* temp = fopen(paths.tempFilePath, "w+");
     removeLine(fptr, temp, cursor.next_cursor);
     fclose(fptr);
     fclose(temp);
-    remove("todos.txt");
-    rename("todos_temp.txt", "todos.txt");
+    remove(paths.todoFilePath);
+    rename(paths.tempFilePath, "todos.txt");
 
     if (todo_count == 0) return;
-    if (cursor.next_cursor == todo_count) // cursor at the highest todo
+    if (cursor.next_cursor == todo_count) // cursor at the last todo
         concatArrow(cursor.next_cursor - 1);
     else concatArrow(cursor.next_cursor);
 
@@ -418,8 +440,11 @@ void cleanMem() {
     free(todos);
 }
 
-void init() {
+void listenUserInput() {
 
+    /*
+        Init
+     */
     readTodos();
 
     pthread_mutex_init(&mutex, NULL);
@@ -438,10 +463,9 @@ void init() {
         thread_logging_info_clear_controller.running = 1;
     }
 
-}
-
-
-void listenUserInput() {
+    /*
+        Listen user input
+     */
     while (1) {
 
         printDashBoard();
@@ -494,7 +518,9 @@ void listenUserInput() {
 }
 
 int main(int argc, char *argv[]) {
-    init();
+    #ifdef PATH
+    createFilePath(argv[1]);
+    #endif /* ifdef PATH */
     listenUserInput();
     return EXIT_SUCCESS;
 }
