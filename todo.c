@@ -147,7 +147,6 @@ void checkShouldClear() {
             thread_logging_info_clear_controller.got_a_job = 0;
             pthread_mutex_unlock(&mutex);
         } else {
-
             pthread_mutex_lock(&mutex);
             while (!thread_logging_info_clear_controller.got_a_job) {
                 pthread_cond_wait(&cond, &mutex);
@@ -272,7 +271,7 @@ void readTodos() {
     size_t len = 0;
     ssize_t read;
 
-    if (fptr == NULL) printf("Failed reading todos from %s\n", paths.todoFilePath);
+    if (fptr == NULL) printf("Failed reading todos from %s\nThe path to the parent directory of todos.txt is not set correctly\n", paths.todoFilePath);
 
     while ((read = getline(&line, &len, fptr)) != -1) {
 
