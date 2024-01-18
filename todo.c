@@ -504,9 +504,9 @@ void listenUserInput() {
             case 'q':
                 printf("Quitting\n");
                 cleanMem();
-                pthread_cond_signal(&cond);
-                pthread_mutex_destroy(&mutex);
-                pthread_cond_destroy(&cond);
+                // pthread_cond_signal(&cond);
+                // pthread_mutex_destroy(&mutex);
+                // pthread_cond_destroy(&cond);
                 return;
             default:
                 printf("%c", userChoice);
