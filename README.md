@@ -6,7 +6,7 @@ A simple CLI todo app, nothing fancy but really useful, it fits perfectly into y
 
 ## Install
 
-1. Set the path in build.sh of todos.txt for storing todos(The absolute/relative path to that Dir)
+1. Set the path in build.sh of todos.txt for storing todos(The absolute path to that Dir)
 
 2. `sh build.sh`
 
