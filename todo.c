@@ -36,13 +36,41 @@ typedef struct {
 typedef struct {
     int running;
     int got_a_job;
-    int count_down;
+    int cool_down;
 } ThreadController;
 
 typedef struct{
     char* todoFilePath;
     char* tempFilePath;
-}TodoFilePaths ;
+} TodoFilePaths ;
+/*
+        Functions
+*/
+
+void disableEcho();
+void enableEcho();
+
+void displayTodos();
+void load_log_info(char* info);
+void log_info();
+void printDashBoard();
+void thread_logging_info_init();
+void checkShouldClear();
+void * loggingInfoClear_ThreadJob(void * param);
+void threadJoin();
+void concatArrow(int target);
+void arrowUp();
+void arrowDown();
+void createTodo();
+void readTodos();
+void removeLine(FILE* src, FILE* temp, int cursor_pointing);
+void replaceLine(FILE* src, FILE* temp, int cursor_pointing, char* input_line);
+void renameTodo();
+void markDoneTodo();
+void printHelp();
+void printDefaultMessage();
+void cleanMem();
+void listenUserInput();
 
 /*
         Initializing
@@ -63,7 +91,7 @@ ThreadController thread_logging_info_clear_controller;
 
 char userChoice;
 
-TodoFilePaths paths = {};
+TodoFilePaths paths = {NULL, NULL};
 
 struct termios oldt, newt;
 /* ========================= */
@@ -128,19 +156,41 @@ void printDashBoard() {
 void thread_logging_info_init() {
     thread_logging_info_clear_controller.running = 1;
     thread_logging_info_clear_controller.got_a_job = 0;
-    thread_logging_info_clear_controller.count_down = 5;
+    thread_logging_info_clear_controller.cool_down = 5;
 }
 
 // NOTE: Had a idea about telling the thread to do a bunch of things
 // after waking up. Now it's just checking a variable to see what to do.
 // Maybe use something like a instruction char* pointer?
 
+// void checkShouldClear() {
+//     while (thread_logging_info_clear_controller.running) {
+
+//         // count_down == 0 means that during the sleep time,
+//         // there is no 'c' being pressed
+//         if (thread_logging_info_clear_controller.got_a_job && thread_logging_info_clear_controller.count_down == 0) {
+//             CLEAR;
+//             printDashBoard();
+//             pthread_mutex_lock(&mutex);
+//             thread_logging_info_clear_controller.got_a_job = 0;
+//             pthread_mutex_unlock(&mutex);
+//         } else {
+//             pthread_mutex_lock(&mutex);
+//             while (!thread_logging_info_clear_controller.got_a_job) {
+//                 pthread_cond_wait(&cond, &mutex);
+//             }
+//             pthread_mutex_unlock(&mutex);
+
+//             thread_logging_info_clear_controller.count_down = 0;
+//             sleep(5); // clear the screen after 5 seconds
+//             checkShouldClear();
+//         }
+//     }
+// }
+
 void checkShouldClear() {
     while (thread_logging_info_clear_controller.running) {
-
-        // count_down == 0 means that during the sleep time,
-        // there is no 'c' being pressed
-        if (thread_logging_info_clear_controller.got_a_job && thread_logging_info_clear_controller.count_down == 0) {
+        if (thread_logging_info_clear_controller.got_a_job && thread_logging_info_clear_controller.cool_down == 0) {
             CLEAR;
             printDashBoard();
             pthread_mutex_lock(&mutex);
@@ -152,10 +202,8 @@ void checkShouldClear() {
                 pthread_cond_wait(&cond, &mutex);
             }
             pthread_mutex_unlock(&mutex);
-
-            thread_logging_info_clear_controller.count_down = 0;
-            sleep(5); // clear the screen after 5 seconds
-            checkShouldClear();
+            thread_logging_info_clear_controller.cool_down = 0;
+            sleep(5);
         }
     }
 }
@@ -165,9 +213,22 @@ void * loggingInfoClear_ThreadJob(void * param) {
     return NULL;
 }
 
+void threadJoin() {
+    pthread_mutex_lock(&mutex);
+    thread_logging_info_clear_controller.running = 0;
+    thread_logging_info_clear_controller.got_a_job = 1;
+    pthread_cond_signal(&cond);
+    pthread_mutex_unlock(&mutex);
+    pthread_join(thread_logging_info_clear, NULL);
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&cond);
+}
+
 void concatArrow(int target) {
 
-    for(int i = 0;; i++) {
+    // Replace the newline character of the target todo with a space
+    // Add strlen boundary check to prevent out of bounds access
+    for(int i = 0; i < strlen(todos[target].todo_info); i++) {
         if(todos[target].todo_info[i] == '\n') {
             todos[target].todo_info[i] = ' ';
             break;
@@ -262,11 +323,11 @@ void createTodo() {
 }
 
 void readTodos() {
-    FILE* fptr = NULL;
-    if (fopen(paths.todoFilePath, "r") != NULL)
-        fptr = fopen(paths.todoFilePath, "r");
-    else 
-        fptr = fopen(paths.todoFilePath, "w"); // Create if todos.txt not exists
+    FILE* fptr = fopen(paths.todoFilePath, "a+");
+    if (fptr == NULL) {
+        printf("Failed reading todos from %s\nThe path to the parent directory of todos.txt is not set correctly\n", paths.todoFilePath);
+        return;
+    }
     char* line = NULL;
     size_t len = 0;
     ssize_t read;
@@ -356,7 +417,7 @@ void renameTodo() {
     getline(&line, &linecap, stdin);
     disableEcho();
 
-    todos[cursor.next_cursor].todo_info = (char *)realloc(todos[cursor.next_cursor].todo_info, strlen(line));
+    todos[cursor.next_cursor].todo_info = (char *)realloc(todos[cursor.next_cursor].todo_info, strlen(line) + 4);
     strcpy(todos[cursor.next_cursor].todo_info, line);
 
     // Rename the corresponding todo in todos.txt
@@ -397,12 +458,17 @@ void markDoneTodo() {
         return;
     }
 
+    // Free the pointer pointing to the completed todo
+    char* todo_done = todos[cursor.next_cursor].todo_info;
+
     todos[cursor.next_cursor].status = COMPLETE;
 
     for (int i = cursor.next_cursor; i <= todo_count - 1; i++) {
         todos[i] = todos[i + 1];
     }
     todo_count--;
+
+    free(todo_done);
 
     FILE* fptr = fopen(paths.todoFilePath, "r+");
     FILE* temp = fopen(paths.tempFilePath, "w+");
@@ -436,7 +502,15 @@ void printDefaultMessage() {
 }
 
 void cleanMem() {
+    for (int i = 0; i < todo_count; i++) {
+        free(todos[i].todo_info);
+    }
     free(todos);
+    free(paths.todoFilePath);
+    free(paths.tempFilePath);
+    todos = NULL;
+    paths.todoFilePath = NULL;
+    paths.tempFilePath = NULL;
 }
 
 void listenUserInput() {
@@ -503,16 +577,15 @@ void listenUserInput() {
                 break;
             case 'q':
                 printf("Quitting\n");
+                enableEcho();
+                threadJoin();
                 cleanMem();
-                // pthread_cond_signal(&cond);
-                // pthread_mutex_destroy(&mutex);
-                // pthread_cond_destroy(&cond);
                 return;
             default:
                 printf("%c", userChoice);
                 printDefaultMessage();
                 CLEAR;
-        }
+            }
     }
 }
 
