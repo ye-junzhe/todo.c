@@ -13,8 +13,8 @@ A simple CLI todo app, nothing fancy but really useful, it fits perfectly into y
 ## Keybindings
 
 ```
-j => Move down
-k => Move up
+j => Cursor down
+k => Cursor up
 c => Create todo
 x => Done todo
 r => Rename todo
