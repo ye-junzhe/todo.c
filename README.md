@@ -8,7 +8,7 @@ A simple CLI todo app, nothing fancy but really useful, it fits perfectly into y
 
 1. Set the path in build.sh of todos.txt for storing todos(The absolute path to that Dir)
 
-2. `sh build.sh`
+2. `sh build.sh` or `cc -o nob nob.c && ./nob`
 
 ## Keybindings
 
