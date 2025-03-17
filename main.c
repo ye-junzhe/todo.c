@@ -1,9 +1,7 @@
 #include <stdlib.h>
 
-#include "log.h"
 #include "file.h"
 #include "cursor.h"
-#include "todo.h"
 #include "thread.h"
 #include "util.h"
 
